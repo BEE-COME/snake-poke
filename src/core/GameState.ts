@@ -74,6 +74,7 @@ export class GameState {
   public onLevelUp?: (level: number) => void;
 
   public gameDuration: number = 0; // seconds
+  public performanceMode: boolean = false; // 极速流畅/省电模式 (关闭高耗能粒子与阴影)
 
   private listeners: Set<StateListener> = new Set();
 
@@ -366,6 +367,12 @@ export class GameState {
     }
 
     return choices;
+  }
+
+  public togglePerformanceMode(): boolean {
+    this.performanceMode = !this.performanceMode;
+    this.notify();
+    return this.performanceMode;
   }
 }
 

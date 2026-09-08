@@ -11,6 +11,7 @@ export const SEGMENT_GAP = 18;
 export class SnakeManager2D {
   public snakes: Snake2DInstance[] = [];
   public screenWidth: number = 390;
+  public screenHeight: number = 844;
 
   /**
    * Spawns the Snake King followed by 99 cuboid body segments (total 100 segments)
@@ -478,8 +479,9 @@ export class SnakeManager2D {
     return newHeadPos;
   }
 
-  public draw(ctx: CanvasRenderingContext2D, screenWidth = 390) {
+  public draw(ctx: CanvasRenderingContext2D, screenWidth = 390, screenHeight = 844) {
     this.screenWidth = screenWidth;
+    this.screenHeight = screenHeight;
     for (const snake of this.snakes) {
       if (snake.segments.length === 0) continue;
 
@@ -527,6 +529,12 @@ export class SnakeManager2D {
       // 2. Draw segments from tail to head as 3D Cuboids (占屏幕宽度6分之一)
       for (let i = totalSegCount - 1; i >= 0; i--) {
         const seg = snake.segments[i];
+
+        // Viewport Culling: Skip segments completely outside visible vertical canvas
+        if (seg.y < -70 || seg.y > (this.screenHeight || 1000) + 70) {
+          continue;
+        }
+
         ctx.save();
 
         const isHit = seg.hitFlash > 0;
@@ -703,8 +711,6 @@ export class SnakeManager2D {
     ctx.stroke();
 
     // 3. 3D Front Face
-    ctx.shadowColor = seg.glowColor;
-    ctx.shadowBlur = 8;
     ctx.fillStyle = isHit ? '#ffffff' : seg.color;
     ctx.strokeStyle = seg.glowColor;
     ctx.lineWidth = 2.2;
@@ -720,10 +726,6 @@ export class SnakeManager2D {
 
     // Prominent Bold HP Number in center (scales dynamically with digit count)
     const hpVal = Math.max(1, Math.ceil(seg.hp));
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 4;
-    ctx.fillStyle = '#ffffff';
-
     const hpText = this.formatHpText(hpVal);
     let fontSize = 13;
     if (hpText.length >= 6) fontSize = 9;
@@ -734,6 +736,7 @@ export class SnakeManager2D {
     ctx.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
     ctx.fillText(hpText, seg.x, seg.y + 1);
 
     // Special type badge
@@ -771,10 +774,6 @@ export class SnakeManager2D {
 
     const x = seg.x - w * 0.5;
     const y = seg.y - h * 0.5;
-
-    // Glowing golden pulse aura
-    ctx.shadowColor = '#fbbf24';
-    ctx.shadowBlur = 14;
 
     // 1. 3D Top Face (Golden Lid)
     ctx.fillStyle = isHit ? '#ffffff' : '#d97706';
@@ -820,8 +819,6 @@ export class SnakeManager2D {
 
     // Prominent Bold HP Number
     const hpVal = Math.max(1, Math.ceil(seg.hp));
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-    ctx.shadowBlur = 4;
     ctx.fillStyle = '#fef08a';
 
     const hpText = this.formatHpText(hpVal);

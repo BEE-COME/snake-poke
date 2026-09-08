@@ -1,5 +1,6 @@
 import { Projectile2D, LaserBeam2D, LightningArc2D, FloatingText2D, Segment2D, BlackHole2D } from './types';
 import { PlayerStats } from '../../types/game';
+import { gameState } from '../GameState';
 
 let nextProjId = 1;
 let nextTextId = 1;
@@ -18,6 +19,12 @@ export class ProjectileManager2D {
     y: number,
     stats: PlayerStats
   ) {
+    const isPerf = gameState.performanceMode;
+    const maxProjectiles = isPerf ? 160 : 280;
+    if (this.projectiles.length >= maxProjectiles) {
+      // Drop oldest bullets when exceeding high-performance budget
+      this.projectiles.splice(0, this.projectiles.length - maxProjectiles + 8);
+    }
     const count = Math.max(1, stats.projectileCount);
     const speed = Math.max(900, (stats.projectileSpeed && stats.projectileSpeed > 100) ? stats.projectileSpeed : 950);
     const baseDamage = stats.damage;
@@ -197,15 +204,27 @@ export class ProjectileManager2D {
   }
 
   public addFloatingText(x: number, y: number, text: string, color = '#ffffff', isCrit = false) {
+    const isPerf = gameState.performanceMode;
+    const maxTexts = isPerf ? 18 : 35;
+
+    // In dense late-game fire, throttle non-critical micro-damage texts to keep canvas silky smooth
+    if (!isCrit && this.floatingTexts.length > (isPerf ? 8 : 16)) {
+      if (Math.random() < 0.6) return;
+    }
+
+    if (this.floatingTexts.length >= maxTexts) {
+      this.floatingTexts.splice(0, this.floatingTexts.length - maxTexts + 3);
+    }
+
     this.floatingTexts.push({
       id: nextTextId++,
-      x: x + (Math.random() - 0.5) * 16,
-      y: y + (Math.random() - 0.5) * 8,
+      x: x + (Math.random() - 0.5) * 12,
+      y: y + (Math.random() - 0.5) * 6,
       text,
       color,
-      size: isCrit ? 16 : 12,
-      life: 0.7,
-      maxLife: 0.7,
+      size: isCrit ? 15 : 12,
+      life: isPerf ? 0.45 : 0.65,
+      maxLife: isPerf ? 0.45 : 0.65,
       vy: -55,
       isCrit
     });
@@ -221,7 +240,8 @@ export class ProjectileManager2D {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.life -= dt;
-      if (p.life <= 0 || p.y < -80 || p.y > screenHeight + 80 || p.x < -80 || p.x > screenWidth + 80) {
+      // Tighter culling bounds for maximum FPS
+      if (p.life <= 0 || p.y < -30 || p.y > screenHeight + 30 || p.x < -30 || p.x > screenWidth + 30) {
         this.projectiles.splice(i, 1);
         continue;
       }
@@ -266,9 +286,9 @@ export class ProjectileManager2D {
 
     // 4. Update lightning arcs
     for (let i = this.lightningArcs.length - 1; i >= 0; i--) {
-      const arc = this.lightningArcs[i];
-      arc.life -= dt;
-      if (arc.life <= 0) {
+      const a = this.lightningArcs[i];
+      a.life -= dt;
+      if (a.life <= 0) {
         this.lightningArcs.splice(i, 1);
       }
     }
@@ -295,6 +315,8 @@ export class ProjectileManager2D {
   }
 
   public draw(ctx: CanvasRenderingContext2D) {
+    const isPerf = gameState.performanceMode;
+
     // Draw black holes
     for (const bh of this.blackHoles) {
       const progress = 1 - bh.life / bh.maxLife;
@@ -335,6 +357,7 @@ export class ProjectileManager2D {
       ctx.stroke();
       ctx.restore();
     }
+
     // Draw lasers
     for (const b of this.laserBeams) {
       const alpha = Math.max(0, b.life / b.maxLife);
@@ -342,8 +365,10 @@ export class ProjectileManager2D {
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = b.color;
       ctx.lineWidth = b.width;
-      ctx.shadowColor = b.color;
-      ctx.shadowBlur = 14;
+      if (!isPerf) {
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 10;
+      }
       ctx.beginPath();
       ctx.moveTo(b.x1, b.y1);
       ctx.lineTo(b.x2, b.y2);
@@ -365,9 +390,11 @@ export class ProjectileManager2D {
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = arc.color;
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = '#60a5fa';
-      ctx.shadowBlur = 10;
+      ctx.lineWidth = 2.2;
+      if (!isPerf) {
+        ctx.shadowColor = '#60a5fa';
+        ctx.shadowBlur = 8;
+      }
       ctx.beginPath();
       for (let pIdx = 0; pIdx < arc.points.length; pIdx++) {
         const p = arc.points[pIdx];
@@ -378,15 +405,12 @@ export class ProjectileManager2D {
       ctx.restore();
     }
 
-    // Draw player projectiles
+    // Draw player projectiles (Ultra-fast batching without expensive Gaussian shadowBlur)
     for (const p of this.projectiles) {
       ctx.save();
-      ctx.fillStyle = p.color;
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 8;
 
       if (p.type === 'ICE') {
-        // Diamond ice shard
+        ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y - p.radius * 1.5);
         ctx.lineTo(p.x + p.radius, p.y);
@@ -395,13 +419,13 @@ export class ProjectileManager2D {
         ctx.closePath();
         ctx.fill();
       } else if (p.type === 'MISSILE') {
-        // Red warhead
+        ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#fde047';
         ctx.beginPath();
-        ctx.arc(p.x, p.y + 4, 2, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y + 3, 2, 0, Math.PI * 2);
         ctx.fill();
       } else {
         const angle = Math.atan2(p.vy, p.vx) + Math.PI / 2;
@@ -410,11 +434,11 @@ export class ProjectileManager2D {
 
         // Faint glowing tail trail
         ctx.fillStyle = p.color;
-        ctx.globalAlpha = 0.45;
+        ctx.globalAlpha = 0.40;
         ctx.beginPath();
         ctx.moveTo(-p.radius * 0.7, 0);
         ctx.lineTo(p.radius * 0.7, 0);
-        ctx.lineTo(0, 16);
+        ctx.lineTo(0, 14);
         ctx.closePath();
         ctx.fill();
 
@@ -440,8 +464,6 @@ export class ProjectileManager2D {
       ctx.fillStyle = '#ef4444';
       ctx.strokeStyle = '#fca5a5';
       ctx.lineWidth = 1.5;
-      ctx.shadowColor = '#ef4444';
-      ctx.shadowBlur = 10;
       ctx.beginPath();
       ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2);
       ctx.fill();
@@ -449,16 +471,19 @@ export class ProjectileManager2D {
       ctx.restore();
     }
 
-    // Draw floating texts
+    // Draw floating texts with ultra-crisp comic stroke (Zero Gaussian blur passes)
     for (const t of this.floatingTexts) {
       const alpha = Math.max(0, t.life / t.maxLife);
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = t.color;
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 4;
-      ctx.font = t.isCrit ? `bold ${t.size}px sans-serif` : `bold ${t.size}px sans-serif`;
+      ctx.font = t.isCrit ? `900 ${t.size}px system-ui, sans-serif` : `800 ${t.size}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
+      // Crisp outline
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#000000';
+      ctx.strokeText(t.text, t.x, t.y);
+      // Vivid fill
+      ctx.fillStyle = t.color;
       ctx.fillText(t.text, t.x, t.y);
       ctx.restore();
     }

@@ -113,12 +113,25 @@ export const HUD: React.FC<HUDProps> = ({ onPauseToggle }) => {
           </div>
         </div>
 
-        {/* Right: Gold & Sound Button */}
+        {/* Right: Gold, Performance Mode & Sound Button */}
         <div className="flex items-center gap-1.5">
           <div className="flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-950/80 px-2.5 py-1 text-xs font-black text-amber-300 shadow">
             <span>💰</span>
             <span>{gameState.gold}</span>
           </div>
+
+          <button
+            onClick={() => gameState.togglePerformanceMode()}
+            title={gameState.performanceMode ? '极速流畅模式已开启 (点击切换画质)' : '画质模式 (卡顿可点击开启极速流畅)'}
+            className={`pointer-events-auto flex h-7 items-center gap-1 rounded-full border px-2 text-[10px] font-black tracking-wider transition-all cursor-pointer shadow ${
+              gameState.performanceMode
+                ? 'border-emerald-500/80 bg-emerald-950/90 text-emerald-300 shadow-emerald-950/50'
+                : 'border-slate-700 bg-slate-900/85 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Zap className={`h-3 w-3 ${gameState.performanceMode ? 'text-emerald-400 fill-emerald-400' : 'text-slate-400'}`} />
+            <span>{gameState.performanceMode ? '流畅' : '画质'}</span>
+          </button>
 
           <button
             onClick={handleToggleSound}

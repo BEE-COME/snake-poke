@@ -1,11 +1,17 @@
 import { Particle2D, FlyingCoin2D } from './types';
+import { gameState } from '../GameState';
 
 export class ParticleSystem2D {
   public particles: Particle2D[] = [];
   public coins: FlyingCoin2D[] = [];
 
-  public emitSparks(x: number, y: number, color: string, count = 8, speed = 120) {
-    for (let i = 0; i < count; i++) {
+  public emitSparks(x: number, y: number, color: string, count = 6, speed = 120) {
+    const isPerf = gameState.performanceMode;
+    const maxParticles = isPerf ? 45 : 85;
+    if (this.particles.length >= maxParticles) return;
+
+    const actualCount = isPerf ? Math.min(3, count) : count;
+    for (let i = 0; i < actualCount; i++) {
       const angle = Math.random() * Math.PI * 2;
       const vel = (0.4 + Math.random() * 0.8) * speed;
       this.particles.push({
@@ -13,16 +19,22 @@ export class ParticleSystem2D {
         y,
         vx: Math.cos(angle) * vel,
         vy: Math.sin(angle) * vel,
-        size: 2 + Math.random() * 3,
+        size: 2 + Math.random() * 2.5,
         color,
-        life: 0.25 + Math.random() * 0.35,
-        maxLife: 0.6,
+        life: 0.18 + Math.random() * 0.2,
+        maxLife: 0.38,
         shape: 'SPARK'
       });
     }
   }
 
-  public emitExplosion(x: number, y: number, color: string, count = 16, radius = 16) {
+  public emitExplosion(x: number, y: number, color: string, count = 12, radius = 16) {
+    const isPerf = gameState.performanceMode;
+    const maxParticles = isPerf ? 45 : 85;
+    if (this.particles.length >= maxParticles) {
+      this.particles.splice(0, 10);
+    }
+
     // Shockwave ring
     this.particles.push({
       x,
@@ -31,23 +43,24 @@ export class ParticleSystem2D {
       vy: 0,
       size: radius * 0.5,
       color,
-      life: 0.35,
-      maxLife: 0.35,
+      life: 0.25,
+      maxLife: 0.25,
       shape: 'RING'
     });
 
-    for (let i = 0; i < count; i++) {
+    const actualCount = isPerf ? Math.min(6, count) : count;
+    for (let i = 0; i < actualCount; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const spd = 40 + Math.random() * 160;
+      const spd = 40 + Math.random() * 140;
       this.particles.push({
         x,
         y,
         vx: Math.cos(angle) * spd,
         vy: Math.sin(angle) * spd,
-        size: 3 + Math.random() * 4,
+        size: 2.5 + Math.random() * 3,
         color,
-        life: 0.4 + Math.random() * 0.4,
-        maxLife: 0.8,
+        life: 0.25 + Math.random() * 0.25,
+        maxLife: 0.5,
         shape: Math.random() > 0.4 ? 'CIRCLE' : 'SPARK'
       });
     }
@@ -150,8 +163,6 @@ export class ParticleSystem2D {
         ctx.fill();
       } else if (p.shape === 'STAR') {
         ctx.fillStyle = p.color;
-        ctx.shadowColor = '#fbbf24';
-        ctx.shadowBlur = 6;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
@@ -164,14 +175,12 @@ export class ParticleSystem2D {
       ctx.restore();
     }
 
-    // Draw flying coins
+    // Draw flying coins (crisp stroke without blur pass)
     for (const c of this.coins) {
       ctx.save();
       ctx.fillStyle = '#fbbf24';
       ctx.strokeStyle = '#d97706';
       ctx.lineWidth = 1.5;
-      ctx.shadowColor = '#f59e0b';
-      ctx.shadowBlur = 8;
       ctx.beginPath();
       ctx.arc(c.x, c.y, 6.5, 0, Math.PI * 2);
       ctx.fill();

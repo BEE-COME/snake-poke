@@ -558,40 +558,59 @@ export class GameEngine {
 
   private handleCollisions() {
     const stats = gameState.stats;
+    const isPerf = gameState.performanceMode;
 
     // 1. Player Projectiles vs Snake Segments
-    for (let pIdx = this.projectileManager.projectiles.length - 1; pIdx >= 0; pIdx--) {
-      const p = this.projectileManager.projectiles[pIdx];
+    for (const snake of this.snakeManager.snakes) {
+      // Pre-gather visible segments on screen once per snake
+      const activeSegs: Segment2D[] = [];
+      for (let i = 0; i < snake.segments.length; i++) {
+        const s = snake.segments[i];
+        if (s.y >= -35 && s.y <= this.height + 35) {
+          activeSegs.push(s);
+        }
+      }
+      if (activeSegs.length === 0) continue;
 
-      for (const snake of this.snakeManager.snakes) {
+      for (let pIdx = this.projectileManager.projectiles.length - 1; pIdx >= 0; pIdx--) {
+        const p = this.projectileManager.projectiles[pIdx];
         let hitAny = false;
 
-        for (let sIdx = snake.segments.length - 1; sIdx >= 0; sIdx--) {
-          const seg = snake.segments[sIdx];
-          const dx = p.x - seg.x;
-          const dy = p.y - seg.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+        for (let sIdx = 0; sIdx < activeSegs.length; sIdx++) {
+          const seg = activeSegs[sIdx];
+          const radiusSum = p.radius + seg.radius;
 
-          if (dist < p.radius + seg.radius) {
+          // Fast AABB bounding box rejection before squaring
+          const dy = p.y - seg.y;
+          if (dy > radiusSum || dy < -radiusSum) continue;
+          const dx = p.x - seg.x;
+          if (dx > radiusSum || dx < -radiusSum) continue;
+
+          const distSq = dx * dx + dy * dy;
+          if (distSq < radiusSum * radiusSum) {
             hitAny = true;
             this.applyDamageToSegment(seg, snake, p.damage, p.isCrit);
 
             // 1.1 Fire DoT (炼狱烈焰)
             if (stats.fireChance > 0 && Math.random() < stats.fireChance) {
               seg.burnTimer = 3.5;
-              this.particleSystem.emitSparks(seg.x, seg.y, '#f97316', 5);
+              this.particleSystem.emitSparks(seg.x, seg.y, '#f97316', 3);
             }
 
             // 1.2 Explosion AOE (高爆弹头)
             if (stats.aoeRadius > 0 && p.type !== 'SHRAPNEL') {
               const blastRadius = stats.aoeRadius * 22;
               const aoeDmg = p.damage * (stats.aoeDamageMultiplier || 0.65);
-              this.particleSystem.emitExplosion(p.x, p.y, '#f97316', 8, blastRadius * 0.6);
+              this.particleSystem.emitExplosion(p.x, p.y, '#f97316', isPerf ? 4 : 8, blastRadius * 0.6);
+              const blastRadiusSq = blastRadius * blastRadius;
               for (const snk of this.snakeManager.snakes) {
                 for (const s of snk.segments) {
-                  if (s === seg) continue;
-                  const d = Math.hypot(s.x - p.x, s.y - p.y);
-                  if (d < blastRadius) {
+                  if (s === seg || s.y < -35 || s.y > this.height + 35) continue;
+                  const adx = s.x - p.x;
+                  if (adx > blastRadius || adx < -blastRadius) continue;
+                  const ady = s.y - p.y;
+                  if (ady > blastRadius || ady < -blastRadius) continue;
+                  if (adx * adx + ady * ady < blastRadiusSq) {
                     this.applyDamageToSegment(s, snk, aoeDmg, p.isCrit);
                     if (gameState.activeSynergyIds.has('inferno')) {
                       s.burnTimer = 3.0;
@@ -617,15 +636,15 @@ export class GameEngine {
             if (p.bouncesLeft && p.bouncesLeft > 0) {
               p.bouncesLeft--;
               let nextTarget: Segment2D | null = null;
-              let minD = Infinity;
-              for (const snk of this.snakeManager.snakes) {
-                for (const s of snk.segments) {
-                  if (s === seg || s.hp <= 0) continue;
-                  const d = Math.hypot(s.x - p.x, s.y - p.y);
-                  if (d < 180 && d < minD) {
-                    minD = d;
-                    nextTarget = s;
-                  }
+              let minDSq = 180 * 180;
+              for (const s of activeSegs) {
+                if (s === seg || s.hp <= 0) continue;
+                const rdx = s.x - p.x;
+                const rdy = s.y - p.y;
+                const dSq = rdx * rdx + rdy * rdy;
+                if (dSq < minDSq) {
+                  minDSq = dSq;
+                  nextTarget = s;
                 }
               }
               if (nextTarget) {
@@ -637,7 +656,7 @@ export class GameEngine {
                 p.vy = (bdy / bdist) * spd;
                 p.x = seg.x;
                 p.y = seg.y;
-                this.particleSystem.emitSparks(p.x, p.y, '#38bdf8', 5);
+                this.particleSystem.emitSparks(p.x, p.y, '#38bdf8', 3);
                 didRicochet = true;
               }
             }
@@ -960,7 +979,7 @@ export class GameEngine {
     ctx.setLineDash([]);
 
     // 4. Draw Snakes and Boss (3D Cuboids 1/6 screen width)
-    this.snakeManager.draw(ctx, this.width);
+    this.snakeManager.draw(ctx, this.width, this.height);
 
     // 4.2 Draw Mid-Field Multiplier Gates (广告同款倍率门)
     this.multiplierGates.draw(ctx);

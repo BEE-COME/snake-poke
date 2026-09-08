@@ -1,0 +1,6 @@
+{
+  "name": "3D打大蛇",
+  "description": "竖屏超休闲弹幕射击游戏，迎战直接降临的灭世蛇王与99节等距长方体身躯，穿透倍率门爆破消灭！",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
